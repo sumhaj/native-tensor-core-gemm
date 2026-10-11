@@ -1,0 +1,7 @@
+build/
+*.o
+*.obj
+*.ncu-rep
+*.nsys-rep
+compile_commands.json
+.cache/
