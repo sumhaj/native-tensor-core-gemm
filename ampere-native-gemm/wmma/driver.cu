@@ -8,20 +8,13 @@
 #include "matrix_utils.cuh"
 #include "verify.cuh"
 
-#include "kernels/wmma_naive.cuh"
+#include "kernels.cuh"
 
-void run_custom_wmma_kernel(__half *A, __half *B, float *C, const int M, const int N, const int K, 
-    float alpha, float beta){
-    dim3 gridDim((M * N) / (16 * 16 * 16));
-    dim3 threadPerBlock(512);
-    gemm_wmma_naive<<<gridDim, threadPerBlock>>>(A, B, C, M, N, K, alpha, beta);
-}
-
-void print_matrix(float* mat, int n){
-    printf("\n");
-    for(int i=0; i<20; i++) 
-        printf("%f\n", mat[i]);
-}
+// void print_matrix(float* mat, int n){
+//     printf("\n");
+//     for(int i=0; i<20; i++) 
+//         printf("%f\n", mat[i]);
+// }
 
 void setup_and_execute_kernel(int argc, char **argv){
 
@@ -30,6 +23,7 @@ void setup_and_execute_kernel(int argc, char **argv){
     const long M = config.M;
     const long N = config.N;
     const long K = config.K;
+    const std::string kernel = config.kernel;
 
     const float alpha = config.alpha;
     const float beta = config.beta;
@@ -70,7 +64,7 @@ void setup_and_execute_kernel(int argc, char **argv){
 
     std::function<void()> cublas_kernel = std::bind(runCublasFP16TensorOp, handle, M, N, K, dA, dB, dC_ref,
     alpha, beta);
-    std::function<void()> custom_wmma_kernel = std::bind(run_custom_wmma_kernel, dA, dB, dC, M, N, K, 
+    std::function<void()> custom_wmma_kernel = std::bind(run_custom_wmma_kernel, kernel, dA, dB, dC, M, N, K, 
     alpha, beta);
 
     cublas_kernel();

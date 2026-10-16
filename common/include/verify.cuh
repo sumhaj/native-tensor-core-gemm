@@ -10,7 +10,7 @@ inline float nt_to_float(__half v) { return __half2float(v); }
 inline float nt_to_float(__nv_bfloat16 v) { return __bfloat162float(v); }
 
 // Combined absolute+relative tolerance check: |ref - out| <= abs_tol + rel_tol*|ref|.
-// A fixed absolute tolerance (as SGEMM_CUDA used for fp32) is the wrong check for
+// A fixed absolute tolerance (used for fp32) is the wrong check for
 // fp16-accumulate kernels, where error scales with the magnitude of each entry.
 template <typename T>
 bool verify_matrix(const float *ref, const T *out, long n,

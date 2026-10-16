@@ -17,7 +17,7 @@
     }                                                                         \
   } while (0)
 
-// Ported from SGEMM_CUDA: gettimeofday-seeded RNG avoids the low time-precision
+// gettimeofday-seeded RNG avoids the low time-precision
 // collisions that srand(time(NULL)) hits when launching kernels back-to-back.
 inline void randomize_matrix(__half *mat, long n) {
   struct timeval time {};

@@ -8,11 +8,6 @@
 #include <cuda_runtime.h>
 #include "matrix_utils.cuh"
 
-// Fixes two weaknesses in SGEMM_CUDA's driver: it drew M/N/K randomly per run
-// (no way to benchmark one specific size or a size sweep from the CLI), and its
-// only "warmup" was the single correctness-check kernel launch before a fixed
-// 50-iteration timed loop. Here warmup and timing are explicit, separate, and
-// the problem size is always CLI-controlled.
 struct BenchConfig {
   long M = 4096, N = 4096, K = 4096;
   int warmup = 5;

@@ -3,23 +3,18 @@
 #include <mma.h>
 using namespace nvcuda;
 
+
+template <const int WMMA_M, const int WMMA_N, const int WMMA_K>
 __global__ void gemm_wmma_naive(__half *A, __half *B, float *C, const int M, const int N, const int K, 
     float alpha, float beta){
-    
-    const int WMMA_M = 16;
-    const int WMMA_N = 16;
-    const int WMMA_K = 16;
 
-    int blockRow = blockIdx.y;
-    int blockCol = blockIdx.x;
-
-    int number_of_warps = blockDim.x / warpSize; // 16
+    int number_of_warps = blockDim.x / warpSize;
     
     // number of warps along N dim
-    int warpNDim = N / WMMA_N; // 64
+    int warpNDim = N / WMMA_N;
 
     // Calculate warp no. for the current thread
-    int warpIdx = blockCol * number_of_warps + (threadIdx.x / warpSize); 
+    int warpIdx = blockIdx.x * number_of_warps + (threadIdx.x / warpSize); 
     // Warp no. along M dim
     int warpM = warpIdx / warpNDim;
     // Warp no. along M dim

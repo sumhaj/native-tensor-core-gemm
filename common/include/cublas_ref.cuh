@@ -6,8 +6,7 @@
 #include <cuda_fp16.h>
 
 // cuBLAS is column-major; our matrices are row-major. Computing (B^T * A^T) = (A*B)^T
-// lets us hand cuBLAS the transposed problem directly instead of transposing data --
-// same trick SGEMM_CUDA used, kept as-is since it's correct.
+// lets us hand cuBLAS the transposed problem directly instead of transposing data
 
 inline void runCublasFP32(cublasHandle_t handle, int M, int N, int K, const float *A,
                            const float *B, float *C, float alpha, float beta) {
