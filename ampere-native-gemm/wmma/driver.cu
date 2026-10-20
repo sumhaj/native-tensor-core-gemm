@@ -10,12 +10,6 @@
 
 #include "kernels.cuh"
 
-// void print_matrix(float* mat, int n){
-//     printf("\n");
-//     for(int i=0; i<20; i++) 
-//         printf("%f\n", mat[i]);
-// }
-
 void setup_and_execute_kernel(int argc, char **argv){
 
     BenchConfig config = parse_bench_args(argc, argv);
@@ -74,10 +68,6 @@ void setup_and_execute_kernel(int argc, char **argv){
     CUDA_CHECK(cudaMemcpy(hC, dC, sizeof(float) * M * N, cudaMemcpyDeviceToHost));
     CUDA_CHECK(cudaMemcpy(hC_ref, dC_ref, sizeof(float) * M * N, cudaMemcpyDeviceToHost));
 
-    // printf("hC_ref\n");
-    // print_matrix(hC_ref, M*N);
-    // printf("hC\n");
-    // print_matrix(hC, M*N);
     if(!verify_matrix(hC_ref, hC, M*N)) return;
 
     const float avg_ms_cublas_kernel = run_warmup_then_timed(cublas_kernel, 20, 200);

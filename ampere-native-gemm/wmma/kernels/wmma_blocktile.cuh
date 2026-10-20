@@ -3,29 +3,12 @@
 #include <mma.h>
 using namespace nvcuda;
 
-template <const int BM, const int BN, const int BK>
-__device__ void load_data_to_smem(__half *A, __half *B, __half *As, __half *Bs, const int N, const int K, 
-    int innerRowA, int innerColA, int strideA, int innerRowB, int innerColB, int strideB){
-
-    for(int loadOffset = 0; loadOffset < BM; loadOffset += strideA){
-        As[(innerRowA + loadOffset) * BK + innerColA] = A[(innerRowA + loadOffset) * K + innerColA];
-    }
-
-    for(int loadOffset = 0; loadOffset < BK; loadOffset += strideB){
-        Bs[(innerRowB + loadOffset) * BN + innerColB] = B[(innerRowB + loadOffset) * N + innerColB];
-    }
-    __syncthreads();
-}
-
 template <const int BM, const int BN, const int BK, const int WMMA_M, const int WMMA_N, const int WMMA_K>
 __global__ void gemm_wmma_blocktiling(__half *A, __half *B, float *C, const int M, const int N, const int K, 
     float alpha, float beta){
 
     int blockRow = blockIdx.y;
     int blockCol = blockIdx.x;
-
-    int numThreadsPerBlock = blockDim.x;
-    // int numOfWarps = numThreadsPerBlock / warpSize;
 
     int warpIdx = threadIdx.x / warpSize;
     int warpRow = warpIdx / (BN / WMMA_N);
@@ -41,13 +24,11 @@ __global__ void gemm_wmma_blocktiling(__half *A, __half *B, float *C, const int 
     B += blockCol * BN;
     C += blockRow * BM * N + blockCol * BN;
 
-    int innerRowA = threadIdx.x / BK;
-    int innerColA = threadIdx.x % BK;
-    int strideA = numThreadsPerBlock / BK;
+    int innerRowA = threadIdx.x / (BK / 8);
+    int innerColA = threadIdx.x % (BK / 8);
 
-    int innerRowB = threadIdx.x / BN;
-    int innerColB = threadIdx.x % BN;
-    int strideB = numThreadsPerBlock / BN;
+    int innerRowB = threadIdx.x / (BN / 8);
+    int innerColB = threadIdx.x % (BN / 8);
 
     wmma::fragment<wmma::matrix_a, WMMA_M, WMMA_N, WMMA_K, half, wmma::row_major> a_frag;
     wmma::fragment<wmma::matrix_b, WMMA_M, WMMA_N, WMMA_K, half, wmma::row_major> b_frag;
@@ -58,8 +39,12 @@ __global__ void gemm_wmma_blocktiling(__half *A, __half *B, float *C, const int 
 
     for(int blockTileIdx = 0; blockTileIdx < K; blockTileIdx += BK){
 
-        load_data_to_smem<BM, BN, BK>(A, B, As, Bs, N, K, innerRowA, innerColA, strideA, 
-            innerRowB, innerColB, strideB);
+        reinterpret_cast<float4 *>(&As[innerRowA * BK + innerColA * 8])[0] = 
+        reinterpret_cast<float4 *>(&A[innerRowA * K + innerColA * 8])[0];
+
+        reinterpret_cast<float4 *>(&Bs[innerRowB * BN + innerColB * 8])[0] = 
+        reinterpret_cast<float4 *>(&B[innerRowB * N + innerColB * 8])[0];
+        __syncthreads();
 
         A += BK;
         B += BK * N;
