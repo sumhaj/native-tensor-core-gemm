@@ -5,6 +5,7 @@
 #include "kernels/wmma_naive.cuh"
 #include "kernels/wmma_blocktile.cuh"
 #include "kernels/wmma_warptile.cuh"
+#include "kernels/wmma_double_buffer.cuh"
 
 void run_wmma_naive(__half *A, __half *B, float *C, const int M, const int N, const int K, 
     float alpha, float beta){
@@ -67,6 +68,34 @@ void run_wmma_warptiling(__half *A, __half *B, float *C, const int M, const int 
     <<<gridDim, threadsPerBlock>>>(A, B, C, M, N, K, alpha, beta);
 }
 
+void run_wmma_double_buffer(__half *A, __half *B, float *C, const int M, const int N, const int K, 
+    float alpha, float beta){
+
+    const int WMMA_M = 16;
+    const int WMMA_N = 16;
+    const int WMMA_K = 16;
+    const int BM = 64;
+    const int BN = 64;
+    const int BK = 64;
+    const int WM = 32;
+    const int WN = 32;
+    const int WARPSIZE = 32;
+
+    constexpr int numThreadsPerBlock = (WARPSIZE * WN * WM) / (WMMA_M * WMMA_N);
+
+    static_assert((WM * WN * WARPSIZE) % (WMMA_M * WMMA_N) == 0);
+    static_assert(BM % WM == 0);
+    static_assert(BN % WN == 0);
+
+    dim3 gridDim((N / BN) , (M / BM));
+    dim3 threadsPerBlock(numThreadsPerBlock);
+
+    gemm_wmma_double_buffer<BM, BN, BK, WM, WN, WMMA_M, WMMA_N, WMMA_K, numThreadsPerBlock>
+    <<<gridDim, threadsPerBlock>>>(A, B, C, M, N, K, alpha, beta);
+
+
+}
+
 void run_custom_wmma_kernel(std::string kernel, __half *A, __half *B, float *C, const int M, const int N, 
     const int K, float alpha, float beta){
     
@@ -78,5 +107,8 @@ void run_custom_wmma_kernel(std::string kernel, __half *A, __half *B, float *C, 
         }
         else if(kernel == "warptiling"){
             run_wmma_warptiling(A, B, C, M, N, K, alpha, beta);
+        }
+        else if(kernel == "double_buffer"){
+            run_wmma_double_buffer(A, B, C, M, N, K, alpha, beta);
         }
 }
