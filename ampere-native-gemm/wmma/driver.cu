@@ -68,7 +68,8 @@ void setup_and_execute_kernel(int argc, char **argv){
     CUDA_CHECK(cudaMemcpy(hC, dC, sizeof(float) * M * N, cudaMemcpyDeviceToHost));
     CUDA_CHECK(cudaMemcpy(hC_ref, dC_ref, sizeof(float) * M * N, cudaMemcpyDeviceToHost));
 
-    if(!verify_matrix(hC_ref, hC, M*N)) return;
+    bool pass;
+    pass = verify_matrix(hC_ref, hC, M*N);
 
     const float avg_ms_cublas_kernel = run_warmup_then_timed(cublas_kernel, 20, 200);
     double gflop_cublas_kernel = gflops(M, N, K, avg_ms_cublas_kernel);
@@ -77,8 +78,8 @@ void setup_and_execute_kernel(int argc, char **argv){
 
     const float avg_ms_custom_wmma_kernel = run_warmup_then_timed(custom_wmma_kernel, 20, 200);
     double gflop_custom_wmma_kernel = gflops(M, N, K, avg_ms_custom_wmma_kernel);
-    BenchResult custom_wmma_result = {.kernel_name="wmma", .M = M, .N = N, .K = K, .iters= 200, 
-        .avg_ms = avg_ms_custom_wmma_kernel, .gflops_val = gflop_custom_wmma_kernel};
+    BenchResult custom_wmma_result = {.kernel_name="wmma_" + kernel, .M = M, .N = N, .K = K, .iters= 200, 
+        .avg_ms = avg_ms_custom_wmma_kernel, .gflops_val = gflop_custom_wmma_kernel, .pass = pass};
 
     report_result(cublas_result, "results/benchmark.csv");
     report_result(custom_wmma_result, "results/benchmark.csv");

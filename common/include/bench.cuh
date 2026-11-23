@@ -78,27 +78,23 @@ struct BenchResult {
   int iters;
   float avg_ms;
   double gflops_val;
-  // float max_abs_err, max_rel_err;
-  // bool pass;
+  bool pass = true;
 };
 
 inline void report_result(const BenchResult &r, const std::string &csv_path) {
-  // printf("[%s] M=%ld N=%ld K=%ld dtype=%s avg=%.6fms gflops=%.1f pass=%s\n",
-  //        r.kernel_name.c_str(), r.M, r.N, r.K, r.dtype.c_str(), r.avg_ms,
-  //        r.gflops_val, r.pass ? "yes" : "no");
-  printf("[%s] M=%ld N=%ld K=%ld dtype=%s avg=%.6fms gflops=%.1f\n",
-         r.kernel_name.c_str(), r.M, r.N, r.K, r.dtype.c_str(), r.avg_ms,
-         r.gflops_val);
+  
+  
   if (csv_path.empty()) return;
   bool exists = (fopen(csv_path.c_str(), "r") != nullptr);
   FILE *f = fopen(csv_path.c_str(), "a");
   if (!f) return;
   if (!exists)
-    fprintf(f, "kernel,M,N,K,dtype,iters,avg_ms,gflops,max_abs_err,max_rel_err,pass\n");
-  // fprintf(f, "%s,%ld,%ld,%ld,%s,%d,%.6f,%.3f,%.6f,%.6f,%d\n", r.kernel_name.c_str(),
-  //         r.M, r.N, r.K, r.dtype.c_str(), r.iters, r.avg_ms, r.gflops_val,
-  //         r.max_abs_err, r.max_rel_err, r.pass ? 1 : 0);
-  fprintf(f, "%s,%ld,%ld,%ld,%s,%d,%.6f,%.3f\n", r.kernel_name.c_str(),
-          r.M, r.N, r.K, r.dtype.c_str(), r.iters, r.avg_ms, r.gflops_val);
+    fprintf(f, "kernel,M,N,K,iters,avg_ms,gflops,pass\n");
+  fprintf(f, "%s,%ld,%ld,%ld,%d,%.6f,%.3f,%d\n", r.kernel_name.c_str(),
+          r.M, r.N, r.K, r.iters, r.avg_ms, r.gflops_val, r.pass ? 1 : 0);
+  // fprintf(f, "%s,%ld,%ld,%ld,%s,%d,%.6f,%.3f\n", r.kernel_name.c_str(),
+  //         r.M, r.N, r.K, r.dtype.c_str(), r.iters, r.avg_ms, r.gflops_val);
+  printf("%s,%ld,%ld,%ld,%d,%.6f,%.3f,%d\n", r.kernel_name.c_str(),
+          r.M, r.N, r.K, r.iters, r.avg_ms, r.gflops_val, r.pass ? 1 : 0);
   fclose(f);
 }

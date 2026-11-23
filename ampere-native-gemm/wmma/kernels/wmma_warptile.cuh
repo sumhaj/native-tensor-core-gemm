@@ -36,14 +36,14 @@ __global__ void gemm_wmma_warptiling(__half *A, __half *B, float *C, const int M
     int innerColB = threadIdx.x % (BN / 8);
     int strideB = 8 * numThreadsPerBlock / BN;       
 
-    wmma::fragment<wmma::matrix_a, WMMA_M, WMMA_N, WMMA_K, half, wmma::row_major> a_frag[WMITER];
-    wmma::fragment<wmma::matrix_b, WMMA_M, WMMA_N, WMMA_K, half, wmma::row_major> b_frag[WNITER];
+    wmma::fragment<wmma::matrix_a, WMMA_M, WMMA_N, WMMA_K, half, wmma::row_major> a_frag;
+    wmma::fragment<wmma::matrix_b, WMMA_M, WMMA_N, WMMA_K, half, wmma::row_major> b_frag;
     wmma::fragment<wmma::accumulator, WMMA_M, WMMA_N, WMMA_K, float> acc_frag[WMITER * WNITER];
-    wmma::fragment<wmma::accumulator, WMMA_M, WMMA_N, WMMA_K, float> c_frag[WMITER * WNITER];
+    wmma::fragment<wmma::accumulator, WMMA_M, WMMA_N, WMMA_K, float> c_frag;
 
-    for(int blockSubRowIdx = 0; blockSubRowIdx < WMITER; blockSubRowIdx++){
-        for(int blockSubColIdx = 0; blockSubColIdx < WNITER; blockSubColIdx++){
-            wmma::fill_fragment(acc_frag[blockSubRowIdx * WNITER + blockSubColIdx], 0.0f);
+    for(int subBlockRowIdx = 0; subBlockRowIdx < WMITER; subBlockRowIdx++){
+        for(int subBlockColIdx = 0; subBlockColIdx < WNITER; subBlockColIdx++){
+            wmma::fill_fragment(acc_frag[subBlockRowIdx * WNITER + subBlockColIdx], 0.0f);
         }
     }
 
@@ -62,16 +62,16 @@ __global__ void gemm_wmma_warptiling(__half *A, __half *B, float *C, const int M
         A += BK;
         B += BK * N;
 
-        for(int blockSubRowIdx = 0; blockSubRowIdx < WMITER; blockSubRowIdx++){
-            for(int blockSubColIdx = 0; blockSubColIdx < WNITER; blockSubColIdx++){
-                const int blockSubIdx = blockSubRowIdx * WNITER + blockSubColIdx;
+        for(int subBlockRowIdx = 0; subBlockRowIdx < WMITER; subBlockRowIdx++){
+            for(int subBlockColIdx = 0; subBlockColIdx < WNITER; subBlockColIdx++){
+                const int subBlockIdx = subBlockRowIdx * WNITER + subBlockColIdx;
                 for(int i = 0; i < BK; i += WMMA_K){
 
-                    wmma::load_matrix_sync(a_frag[blockSubRowIdx], As + (blockSubRowIdx * WM + rowM) * BK + i, BK);
-                    wmma::load_matrix_sync(b_frag[blockSubColIdx], Bs + i * BN + (blockSubColIdx * WN) + colN, BN);
+                    wmma::load_matrix_sync(a_frag, As + (subBlockRowIdx * WM + rowM) * BK + i, BK);
+                    wmma::load_matrix_sync(b_frag, Bs + i * BN + (subBlockColIdx * WN) + colN, BN);
 
-                    wmma::mma_sync(acc_frag[blockSubIdx], a_frag[blockSubRowIdx], 
-                        b_frag[blockSubColIdx], acc_frag[blockSubIdx]);
+                    wmma::mma_sync(acc_frag[subBlockIdx], a_frag, 
+                        b_frag, acc_frag[subBlockIdx]);
                 }
             }
         }
@@ -79,22 +79,21 @@ __global__ void gemm_wmma_warptiling(__half *A, __half *B, float *C, const int M
         __syncthreads();
     }
 
-    for(int blockSubRowIdx = 0; blockSubRowIdx < WMITER; blockSubRowIdx++){
-        for(int blockSubColIdx = 0; blockSubColIdx < WNITER; blockSubColIdx++){
+    for(int subBlockRowIdx = 0; subBlockRowIdx < WMITER; subBlockRowIdx++){
+        for(int subBlockColIdx = 0; subBlockColIdx < WNITER; subBlockColIdx++){
 
-            const int blockSubIdx = blockSubRowIdx * WNITER + blockSubColIdx;
-            float *C_temp = C + blockSubRowIdx * WM * N + blockSubColIdx * WN;
+            const int subBlockIdx = subBlockRowIdx * WNITER + subBlockColIdx;
+            float *C_temp = C + subBlockRowIdx * WM * N + subBlockColIdx * WN;
 
-            wmma::load_matrix_sync(c_frag[blockSubIdx], 
+            wmma::load_matrix_sync(c_frag, 
                 C_temp + rowM * N + colN, N, wmma::mem_row_major);
 
-            for(int i=0; i < c_frag[blockSubIdx].num_elements; i++)
-                c_frag[blockSubIdx].x[i] = 
-                alpha * acc_frag[blockSubIdx].x[i] + 
-                beta * c_frag[blockSubIdx].x[i];
+            for(int i=0; i < c_frag.num_elements; i++)
+                c_frag.x[i] = 
+                alpha * acc_frag[subBlockIdx].x[i] + 
+                beta * c_frag.x[i];
 
-            wmma::store_matrix_sync(C_temp + rowM * N + colN, 
-                c_frag[blockSubIdx], N, wmma::mem_row_major);
+            wmma::store_matrix_sync(C_temp + rowM * N + colN, c_frag, N, wmma::mem_row_major);
         }       
         
     }

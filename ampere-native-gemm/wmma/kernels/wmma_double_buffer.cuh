@@ -1,7 +1,6 @@
 #include <iostream>
 #include <cuda/barrier>
 #include <cooperative_groups.h>
-// #include <cublas_v2.h>
 #include <cuda_runtime.h>
 #include <mma.h>
 using namespace nvcuda;
@@ -29,17 +28,18 @@ template <const int BM, const int BN, const int BK, const int WM, const int WN, 
 __device__ void compute_gemm_using_smem(__half *As, __half *Bs, auto a_frag, auto b_frag, 
     auto acc_frag, const int rowM, const int colN){
     
-    for (int warpSubRowIdx = 0; warpSubRowIdx < WMITER; warpSubRowIdx++){
-        for (int warpSubColIdx = 0; warpSubColIdx < WNITER; warpSubColIdx++){
-            for (int i = 0; i < BK; i += WMMA_K){
-
-                wmma::load_matrix_sync(a_frag, As + (warpSubRowIdx * WM + rowM) * BK + i, BK);
-                wmma::load_matrix_sync(b_frag, Bs + i * BN + warpSubColIdx * WN + colN, BN);
-
-                wmma::mma_sync(acc_frag[warpSubRowIdx * WNITER + warpSubColIdx], a_frag,
-                               b_frag, acc_frag[warpSubRowIdx * WNITER + warpSubColIdx]);
-            }
-        }
+    for (int i = 0; i < BK; i += WMMA_K){
+        for(int warpSubRowIdx = 0; warpSubRowIdx < WMITER; warpSubRowIdx++)
+            wmma::load_matrix_sync(a_frag[warpSubRowIdx], As + (warpSubRowIdx * WM + rowM) * BK + i, BK);
+        
+        for (int warpSubColIdx = 0; warpSubColIdx < WNITER; warpSubColIdx++)
+            wmma::load_matrix_sync(b_frag[warpSubColIdx], Bs + i * BN + warpSubColIdx * WN + colN, BN);
+        
+        for (int warpSubRowIdx = 0; warpSubRowIdx < WMITER; warpSubRowIdx++)
+            for (int warpSubColIdx = 0; warpSubColIdx < WNITER; warpSubColIdx++)
+                wmma::mma_sync(acc_frag[warpSubRowIdx * WNITER + warpSubColIdx], a_frag[warpSubRowIdx],
+                                b_frag[warpSubColIdx], acc_frag[warpSubRowIdx * WNITER + warpSubColIdx]);
+            
     }
 }
 
@@ -63,8 +63,6 @@ __global__ void gemm_wmma_double_buffer(__half *A, __half *B, float *C, const in
 
     auto block = cooperative_groups::this_thread_block();
     using barrier_t = cuda::barrier<cuda::thread_scope_block>;
-    alignas(cuda::barrier<cuda::thread_scope_block>) 
-    // __shared__ char barrier_storage[sizeof(cuda::barrier<cuda::thread_scope_block>)];
 
     __shared__ barrier_t frontBarrier;
     __shared__ barrier_t backBarrier;
@@ -99,8 +97,8 @@ __global__ void gemm_wmma_double_buffer(__half *A, __half *B, float *C, const in
     load_data_to_smem<BM, BN, BK, strideA, strideB>(A, B, As + bufferIdx * BM * BK, Bs + bufferIdx * BK * BN, M, N, K, 
         innerRowA, innerColA, innerRowB, innerColB, (*frontBarrierPtr));
 
-    wmma::fragment<wmma::matrix_a, WMMA_M, WMMA_N, WMMA_K, half, wmma::row_major> a_frag;
-    wmma::fragment<wmma::matrix_b, WMMA_M, WMMA_N, WMMA_K, half, wmma::row_major> b_frag;
+    wmma::fragment<wmma::matrix_a, WMMA_M, WMMA_N, WMMA_K, half, wmma::row_major> a_frag[WMITER];
+    wmma::fragment<wmma::matrix_b, WMMA_M, WMMA_N, WMMA_K, half, wmma::row_major> b_frag[WNITER];
     wmma::fragment<wmma::accumulator, WMMA_M, WMMA_N, WMMA_K, float> acc_frag[WMITER * WNITER];
     wmma::fragment<wmma::accumulator, WMMA_M, WMMA_N, WMMA_K, float> c_frag;
 

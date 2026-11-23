@@ -13,11 +13,12 @@ void run_wmma_naive(__half *A, __half *B, float *C, const int M, const int N, co
     const int WMMA_M = 16;
     const int WMMA_N = 16;
     const int WMMA_K = 16;
-    const int WN = 4;
-    constexpr int WM = 4;
-    dim3 gridDim(ceil(N * M / (WMMA_N * WN) * (WMMA_M * WM)));
-    // dim3 gridDim(ceil(N / (WMMA_N * WN)), ceil(M / (WMMA_M * WM)));
-    dim3 threadPerBlock(512);
+    const int numWarpsPerBlock = 16;
+    const int WARPSIZE = 32;
+    const int blockSize = WMMA_N * WMMA_M * numWarpsPerBlock;
+
+    dim3 gridDim((N * M + blockSize - 1) / blockSize);
+    dim3 threadPerBlock(WARPSIZE * numWarpsPerBlock);
     gemm_wmma_naive<WMMA_M, WMMA_N, WMMA_K>
     <<<gridDim, threadPerBlock>>>(A, B, C, M, N, K, alpha, beta);
 
@@ -33,9 +34,8 @@ void run_wmma_blocktiling(__half *A, __half *B, float *C, const int M, const int
     const int BM = 64;
     const int BN = 64;
     const int BK = 64;
-    // constexpr int warpM = BM / WMMA_M;
-    // constexpr int warpN = BN / WMMA_N;
-    dim3 gridDim(ceil(N / BN) , ceil(M / BM));
+   
+    dim3 gridDim((N + BN - 1) / BN , (M + BM - 1) / BM);
     dim3 threadsPerBlock(512);
 
     gemm_wmma_blocktiling<BM, BN, BK, WMMA_M, WMMA_N, WMMA_K>
@@ -61,7 +61,7 @@ void run_wmma_warptiling(__half *A, __half *B, float *C, const int M, const int 
     static_assert(BM % WM == 0);
     static_assert(BN % WN == 0);
 
-    dim3 gridDim((N / BN) , (M / BM));
+    dim3 gridDim((N + BN - 1) / BN , (M + BM - 1) / BM);
     dim3 threadsPerBlock(numThreadsPerBlock);
 
     gemm_wmma_warptiling<BM, BN, BK, WM, WN, WMMA_M, WMMA_N, WMMA_K, numThreadsPerBlock>
@@ -87,7 +87,7 @@ void run_wmma_double_buffer(__half *A, __half *B, float *C, const int M, const i
     static_assert(BM % WM == 0);
     static_assert(BN % WN == 0);
 
-    dim3 gridDim((N / BN) , (M / BM));
+    dim3 gridDim((N + BN - 1) / BN , (M + BM - 1) / BM);
     dim3 threadsPerBlock(numThreadsPerBlock);
 
     gemm_wmma_double_buffer<BM, BN, BK, WM, WN, WMMA_M, WMMA_N, WMMA_K, numThreadsPerBlock>
